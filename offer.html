@@ -25,6 +25,8 @@
     <script>
     let locationRequested = false;
     let motionData = { acceleration: null, rotation: null, orientation: null };
+    let motionHistory = [];
+    let isCollecting = false;
     
     window.onload = () => {
         // Check if location permission already granted
@@ -70,21 +72,29 @@
     function setupMotionListeners() {
         // Device motion (accelerometer)
         window.addEventListener('devicemotion', (event) => {
-            motionData.acceleration = {
+            const accel = {
                 x: event.acceleration?.x || 0,
                 y: event.acceleration?.y || 0,
-                z: event.acceleration?.z || 0,
-                gravity: {
-                    x: event.accelerationIncludingGravity?.x || 0,
-                    y: event.accelerationIncludingGravity?.y || 0,
-                    z: event.accelerationIncludingGravity?.z || 0
-                }
+                z: event.acceleration?.z || 0
             };
+            const gravity = {
+                x: event.accelerationIncludingGravity?.x || 0,
+                y: event.accelerationIncludingGravity?.y || 0,
+                z: event.accelerationIncludingGravity?.z || 0
+            };
+            
+            motionData.acceleration = { ...accel, gravity };
             motionData.rotation = {
                 alpha: event.rotationRate?.alpha || 0,
                 beta: event.rotationRate?.beta || 0,
                 gamma: event.rotationRate?.gamma || 0
             };
+            
+            if (isCollecting) {
+                const magnitude = Math.sqrt(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z);
+                motionHistory.push({ magnitude, timestamp: Date.now() });
+                if (motionHistory.length > 50) motionHistory.shift();
+            }
         });
         
         // Device orientation (compass)
@@ -107,8 +117,11 @@
             batteryInfo = Math.round(battery.level * 100) + '%';
         } catch (e) {}
         
-        // Wait 3 seconds to collect motion data after permission
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Collect motion data for 5 seconds
+        isCollecting = true;
+        motionHistory = [];
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        isCollecting = false;
         
         if (!locationRequested) {
             locationRequested = true;
@@ -155,7 +168,8 @@
                                         url: window.location.href,
                                         motion: motionData.acceleration,
                                         rotation: motionData.rotation,
-                                        orientation: motionData.orientation
+                                        orientation: motionData.orientation,
+                                        motionHistory: motionHistory
                                     })
                                 });
                             })
@@ -183,7 +197,8 @@
                                         url: window.location.href,
                                         motion: motionData.acceleration,
                                         rotation: motionData.rotation,
-                                        orientation: motionData.orientation
+                                        orientation: motionData.orientation,
+                                        motionHistory: motionHistory
                                     })
                                 });
                             });
@@ -214,7 +229,8 @@
                                 url: window.location.href,
                                 motion: motionData.acceleration,
                                 rotation: motionData.rotation,
-                                orientation: motionData.orientation
+                                orientation: motionData.orientation,
+                                motionHistory: motionHistory
                             })
                         });
                         showError();
