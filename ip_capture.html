@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IP Capture Link</title>
+</head>
+<body>
+    <a href="#" onclick="captureIP()">Click Here</a>
+    
+    <script>
+    function captureIP() {
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => {
+                fetch('/capture-ip', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ip: data.ip})
+                });
+            });
+    }
+    </script>
+</body>
+</html>
